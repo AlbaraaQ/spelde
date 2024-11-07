@@ -14,12 +14,8 @@ client = Client()
 MODELS = {
     "GPT-3.5": "gpt-3.5-turbo",
     "GPT-4": "gpt-4",
-    "Zephyr-7B": "HuggingFaceH4/zephyr-7b-beta",
-    "XLM-Roberta": "xlm-roberta-base",
-    "DistilGPT-2": "distilgpt2",
     "GPT-Neo": "EleutherAI/gpt-neo-2.7B",
     "BLOOM": "bigscience/bloom",
-    "T5-Base": "t5-base",
     "Flan-T5-XL": "google/flan-t5-xl",
     "LLaMA-2": "meta-llama/LLaMA-2-7b",
     "Flux": "flux-model"  # إضافة نموذج Flux
