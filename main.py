@@ -10,7 +10,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 # تهيئة عميل g4f
 client = Client()
 
-# قائمة النماذج المتاحة
+# قائمة النماذج المتاحة في g4f
 MODELS = {
     "GPT-3.5": "gpt-3.5-turbo",
     "GPT-4": "gpt-4",
@@ -18,7 +18,7 @@ MODELS = {
     "BLOOM": "bigscience/bloom",
     "Flan-T5-XL": "google/flan-t5-xl",
     "LLaMA-2": "meta-llama/LLaMA-2-7b",
-    "Flux": "flux-model"  # إضافة نموذج Flux
+    "Flux": "flux"  # نموذج Flux لتوليد الصور
 }
 
 # نموذج افتراضي
@@ -55,20 +55,27 @@ async def respond_to_message(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # اختيار النموذج الحالي للمستخدم، أو النموذج الافتراضي
     model = user_selected_model.get(user_id, MODELS["GPT-3.5"])
 
-    # إعداد الرسالة لإرسالها إلى g4f
-    messages = [{"role": "user", "content": user_message}]
-    
-    # الحصول على رد النموذج
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        max_tokens=100  # حدد الحد الأقصى لعدد الكلمات في الرد
-    )
-    bot_response = response.choices[0].message.content
+    if model == "flux":  # إذا كان النموذج Flux، نولّد صورة
+        response = await client.images.async_generate(
+            prompt=user_message,
+            model=model
+        )
+        image_url = response.data[0].url
+        await update.message.reply_text(f"Generated image URL: {image_url}")
+    else:
+        # إعداد الرسالة لإرسالها إلى g4f
+        messages = [{"role": "user", "content": user_message}]
+        
+        # الحصول على رد النموذج النصي
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=100  # حدد الحد الأقصى لعدد الكلمات في الرد
+        )
+        bot_response = response.choices[0].message.content
+        await update.message.reply_text(bot_response)
 
-    # إرسال الرد إلى المستخدم
-    await update.message.reply_text(bot_response)
-
+# إعداد البوت ومعالجات الرسائ
 # إعداد البوت ومعالجات الرسائل
 def main():
     # استبدل 'YOUR_TELEGRAM_BOT_TOKEN' بالتوكن الخاص بالبوت
