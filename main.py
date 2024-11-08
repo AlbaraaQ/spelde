@@ -1,38 +1,27 @@
 import logging
-from telegram import Update
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+import requests
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
-from g4f.client import Client
 
 # إعداد تسجيل الأخطاء والمعلومات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# تهيئة عميل g4f
-client = Client()
-
-# قائمة النماذج المتاحة في g4f
-MODELS = {
-    "GPT-3.5": "gpt-3.5-turbo",
-    "GPT-4": "gpt-4",
-    "GPT-Neo": "EleutherAI/gpt-neo-2.7B",
-    "BLOOM": "bigscience/bloom",
-    "Flan-T5-XL": "google/flan-t5-xl",
-    "LLaMA-2": "meta-llama/LLaMA-2-7b",
-    "Flux": "flux"  # نموذج Flux لتوليد الصور
-}
+# إعداد عنوان API Together
+TOGETHER_API_URL = "https://api.together.xyz/playground/image/black-forest-labs/FLUX.1-schnell-Free"  # استبدل 'endpoint' بالمسار الصحيح الذي تريد استخدامه
 
 # نموذج افتراضي
 user_selected_model = {}
 
 # وظيفة لبدء البوت وتعريف الأمر /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("مرحبًا! أرسل رسالتك لبدء المحادثة.\n"
+    await update.message.reply_text("مرحبًا! أرسل رسالة لاستخدام API Together.\n"
                                     "للاختيار بين النماذج، استخدم الأمر /choose_model.")
 
 # وظيفة لاختيار النموذج عبر زر Inline
 async def choose_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton(name, callback_data=name) for name in MODELS]
+        [InlineKeyboardButton("Example Model 1", callback_data="example_model_1"),
+         InlineKeyboardButton("Example Model 2", callback_data="example_model_2")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("اختر النموذج الذي ترغب باستخدامه:", reply_markup=reply_markup)
@@ -42,40 +31,39 @@ async def set_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     user_id = query.from_user.id
     selected_model = query.data
-    user_selected_model[user_id] = MODELS[selected_model]
+    user_selected_model[user_id] = selected_model
     
     await query.answer()
     await query.edit_message_text(text=f"تم اختيار النموذج: {selected_model}")
 
-# وظيفة للرد على الرسائل من خلال النموذج المحدد
+# وظيفة للتفاعل مع API Together
+def call_together_api(prompt):
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer YOUR_API_TOKEN'  # إذا كان هناك توكن مطلوب
+    }
+    data = {
+        "input": prompt  # قم بتعديل البيانات حسب احتياجات API Together
+    }
+    response = requests.post(TOGETHER_API_URL, json=data, headers=headers)
+    return response.json()  # إعادة الرد من API، يمكنك تعديله حسب الاستجابة
+
+# وظيفة للرد على الرسائل باستخدام API Together
 async def respond_to_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
     user_message = update.message.text
 
-    # اختيار النموذج الحالي للمستخدم، أو النموذج الافتراضي
-    model = user_selected_model.get(user_id, MODELS["GPT-3.5"])
+    # إذا كنت تريد استخدام نموذج معين، يمكن تخصيصه هنا
+    response = call_together_api(prompt=user_message)
 
-    if model == "flux":  # إذا كان النموذج Flux، نولّد صورة
-        response = await client.images.async_generate(
-            prompt=user_message,
-            model=model
-        )
-        image_url = response.data[0].url
-        await update.message.reply_text(f"Generated image URL: {image_url}")
+    # إرسال الرد للمستخدم
+    if 'response_key' in response:  # قم بتعديل المفتاح بناءً على الاستجابة الفعلية
+        bot_response = response['response_key']
     else:
-        # إعداد الرسالة لإرسالها إلى g4f
-        messages = [{"role": "user", "content": user_message}]
-        
-        # الحصول على رد النموذج النصي
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            max_tokens=100  # حدد الحد الأقصى لعدد الكلمات في الرد
-        )
-        bot_response = response.choices[0].message.content
-        await update.message.reply_text(bot_response)
+        bot_response = "عذرًا، لم أتمكن من الحصول على رد."
 
-# إعداد البوت ومعالجات الرسائ
+    await update.message.reply_text(bot_response)
+
 # إعداد البوت ومعالجات الرسائل
 def main():
     # استبدل 'YOUR_TELEGRAM_BOT_TOKEN' بالتوكن الخاص بالبوت
