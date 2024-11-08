@@ -3,3 +3,5 @@ g4f[all]
 python-telegram-bot
 telegram
 requests
+together
+Pillow
