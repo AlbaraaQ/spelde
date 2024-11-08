@@ -7,7 +7,7 @@ from together import Together  # تأكد من تثبيت مكتبة together
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 # تهيئة عميل Together
-client = Together()
+client = Together(api_key="5ba5c96173d4c62eab6e81edc5abc3f32c4a8c2aa732ef6edbdb2135d27ffdeb")
 
 # وظيفة لبدء البوت وتعريف الأمر /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
