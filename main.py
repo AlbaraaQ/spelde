@@ -1,68 +1,55 @@
 import logging
-import requests
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from together import Together  # تأكد من تثبيت مكتبة together
 
 # إعداد تسجيل الأخطاء والمعلومات
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# إعداد عنوان API Together
-TOGETHER_API_URL = "https://api.together.xyz/playground/image/black-forest-labs/FLUX.1-schnell-Free"  # استبدل 'endpoint' بالمسار الصحيح الذي تريد استخدامه
-
-# نموذج افتراضي
-user_selected_model = {}
+# تهيئة عميل Together
+client = Together()
 
 # وظيفة لبدء البوت وتعريف الأمر /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("مرحبًا! أرسل رسالة لاستخدام API Together.\n"
-                                    "للاختيار بين النماذج، استخدم الأمر /choose_model.")
+    await update.message.reply_text("مرحبًا! أرسل نصًا وسأقوم بتوليد صورة لك باستخدام نموذج FLUX.")
 
-# وظيفة لاختيار النموذج عبر زر Inline
-async def choose_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("Example Model 1", callback_data="example_model_1"),
-         InlineKeyboardButton("Example Model 2", callback_data="example_model_2")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("اختر النموذج الذي ترغب باستخدامه:", reply_markup=reply_markup)
+# وظيفة لتوليد الصور باستخدام Together API
+async def generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_prompt = update.message.text
+    await update.message.reply_text("جاري إنشاء الصورة... قد يستغرق ذلك بعض الوقت.")
 
-# وظيفة لمعالجة اختيار النموذج
-async def set_model(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = query.from_user.id
-    selected_model = query.data
-    user_selected_model[user_id] = selected_model
-    
-    await query.answer()
-    await query.edit_message_text(text=f"تم اختيار النموذج: {selected_model}")
+    try:
+        # توليد الصورة باستخدام Together API
+        response = client.images.generate(
+            prompt=user_prompt,
+            model="black-forest-labs/FLUX.1-schnell-Free",  # استخدام النموذج المحدد
+            width=1024,
+            height=768,
+            steps=1,
+            n=1,
+            response_format="b64_json"
+        )
+        
+        # استخراج الصورة من الاستجابة (إذا كانت متوفرة)
+        if response.data:
+            image_base64 = response.data[0].b64_json
+            # تحويل الصورة من base64 إلى صورة يمكن إرسالها
+            import base64
+            from io import BytesIO
+            from PIL import Image
 
-# وظيفة للتفاعل مع API Together
-def call_together_api(prompt):
-    headers = {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer YOUR_API_TOKEN'  # إذا كان هناك توكن مطلوب
-    }
-    data = {
-        "input": prompt  # قم بتعديل البيانات حسب احتياجات API Together
-    }
-    response = requests.post(TOGETHER_API_URL, json=data, headers=headers)
-    return response.json()  # إعادة الرد من API، يمكنك تعديله حسب الاستجابة
+            image_data = base64.b64decode(image_base64)
+            image = Image.open(BytesIO(image_data))
+            image_path = "/tmp/generated_image.png"
+            image.save(image_path)
 
-# وظيفة للرد على الرسائل باستخدام API Together
-async def respond_to_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.message.from_user.id
-    user_message = update.message.text
+            # إرسال الصورة إلى المستخدم
+            await update.message.reply_photo(photo=open(image_path, 'rb'))
+        else:
+            await update.message.reply_text("عذرًا، لم أتمكن من توليد صورة. يرجى المحاولة مرة أخرى.")
 
-    # إذا كنت تريد استخدام نموذج معين، يمكن تخصيصه هنا
-    response = call_together_api(prompt=user_message)
-
-    # إرسال الرد للمستخدم
-    if 'response_key' in response:  # قم بتعديل المفتاح بناءً على الاستجابة الفعلية
-        bot_response = response['response_key']
-    else:
-        bot_response = "عذرًا، لم أتمكن من الحصول على رد."
-
-    await update.message.reply_text(bot_response)
+    except Exception as e:
+        await update.message.reply_text(f"حدث خطأ أثناء توليد الصورة: {e}")
 
 # إعداد البوت ومعالجات الرسائل
 def main():
@@ -71,9 +58,7 @@ def main():
 
     # الأوامر ومعالجات الرسائل
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("choose_model", choose_model))
-    app.add_handler(CallbackQueryHandler(set_model))  # معالجة اختيار النموذج من الأزرار
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, respond_to_message))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, generate_image))
 
     # تشغيل البوت
     app.run_polling()
