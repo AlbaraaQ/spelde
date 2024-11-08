@@ -63,5 +63,4 @@ def main():
     # تشغيل البوت
     app.run_polling()
 
-if __name__ == "__main__":
-    main()
+if __name_
